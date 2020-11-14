@@ -1,15 +1,22 @@
 const mongo = require('mongodb');
-const axios = require('axios');
+const yargs = require('yargs');
+const vimeworld = require('./vimeworld')
 
-tokens = [];
+const argv = yargs
+    .option('speed', {
+        description: 'How much concurrent scanners will be running at the same time',
+        alias: 's',
+        type: 'number',
+    })
+    .help()
+    .alias('help', 'h')
+    .argv;
 
-process.env.VIMEWORLD_TOKENS.split(',').forEach(token => {
-    tokens.push({
-        token: token.replace(/[^A-Za-z0-9]/g, ''),
-        requestsLeft: -1,
-        resetTime: 0
-    });
-});
+const speed = argv.speed || 4;
+if (speed != 1)
+    console.log(`Using ${speed} parrallel scanners`);
+
+process.env.VIMEWORLD_TOKENS.split(',').forEach(vimeworld.addToken);
 
 var url = process.env.MONGO_URL;
 if (!url) {
@@ -36,7 +43,10 @@ async function collectionCreated(err, res) {
     collection = db.collection("vime");
     let count = await countUsers();
     console.log(`Currently there are ${count} users in the database`);
-    startScanning(process.argv.length > 2 ? +process.argv[2] : 1);
+
+    for (let i = 0; i < speed; i++) {
+        startScanning(i * 1000, speed * 1000);
+    }
 }
 
 async function countUsers() {
@@ -48,48 +58,15 @@ async function countUsers() {
         }));
 }
 
-async function findToken() {
-    return new Promise((ok, err) => {
 
-        if (!tokens) {
-            ok(null);
-            return;
-        }
+async function startScanning(startId, step) {
 
-        let nearestToken;
-        let nearestTime = 1e99;
-        let time = Date.now();
-        for (let token of tokens) {
-            if (token.requestsLeft > 0) {
-                ok(token);
-                return;
-            }
-            if (token.resetTime < nearestTime) {
-                nearestTime = token.resetTime;
-                nearestToken = token;
-            }
-        }
+    let currentId = startId;
+    while (currentId < 10_000_000) {
+        let startTime = Date.now();
+        let playersLeft = await scan(currentId);
 
-        if (time > nearestTime) {
-            ok(nearestToken);
-            return;
-        }
-
-        console.log(`All tokens are expired, the nearest one will be available in ${Math.ceil((nearestTime - time) / 1000)}s.`)
-
-        setTimeout(() => ok(nearestToken), nearestTime - time);
-    });
-}
-
-async function startScanning(startId) {
-
-    let i = startId;
-    let start = Date.now();
-    while (i < 10_000_000) {
-        let from = i;
-        i = await scan(i);
-
-        if (i < 0) {
+        if (!playersLeft) {
             console.log('Seems like there are no players left to scan.')
             let elapsedTime = Math.ceil((Date.now() - globalStart) / 60000);
             console.log('Done in under ' + (elapsedTime == 1 ? 'a minute.' : elapsedTime + ' minutes.'));
@@ -97,11 +74,8 @@ async function startScanning(startId) {
             return;
         }
 
-        if (from != i) {
-            console.log(`Range ${from}-${i-1} took ${Date.now() - start} ms.`)
-            start = Date.now();
-        }
-
+        console.log(`Range ${Math.floor(currentId / 1000)}XXX took ${Date.now() - startTime} ms.`);
+        currentId += step;
     }
 
 }
@@ -123,45 +97,25 @@ async function scan(from) {
         usersToCheck.push(id);
     }
 
-    let token = await findToken();
+    let users = await vimeworld.massSession(usersToCheck);
 
-    let response = await axios({
-        method: 'post',
-        url: 'https://api.vime.world/user/session',
-        data: usersToCheck,
-        headers: token ? {
-            'Access-Token': token.token
-        } : {},
-    });
-
-    token.requestsLeft = +response.headers['x-ratelimit-remaining'];
-    token.resetTime = (+response.headers['x-ratelimit-reset-after'] + 1) * 1000 + Date.now();
-
-    let error = response.data.error;
-    if (error) {
-        console.log(error.error_msg)
-        return from;
-    } else {
-        if (response.data.length == 0) {
-            return -1;
-        }
-        let bulk = collection.initializeUnorderedBulkOp();
-        response.data.forEach(user => {
-            user.lastUpdate = Date.now()
-            user._id = user.id;
-            delete user.id;
-            delete user.online;
-            user.guild = user.guild ? user.guild.id : 0;
-            bulk.find({ _id: user._id }).upsert().update({ $set: user });
-        });
-
-        // collection.insertMany()
-        await bulkExecute(bulk);
-
-        return to;
+    if (users.length == 0) {
+        return false;
     }
 
+    let bulk = collection.initializeUnorderedBulkOp();
+    users.forEach(user => {
+        user.lastUpdate = Date.now()
+        user._id = user.id;
+        delete user.id;
+        delete user.online;
+        user.guild = user.guild ? user.guild.id : 0;
+        bulk.find({ _id: user._id }).upsert().update({ $set: user });
+    });
 
+    await bulkExecute(bulk);
+
+    return true;
 }
 
 

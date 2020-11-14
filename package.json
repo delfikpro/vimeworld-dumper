@@ -10,6 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "axios": "^0.21.0",
-    "mongodb": "^3.6.3"
+    "mongodb": "^3.6.3",
+    "yargs": "^16.1.0"
   }
 }
