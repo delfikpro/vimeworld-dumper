@@ -1,4 +1,3 @@
-const fs = require('fs');
 const mongo = require('mongodb');
 const axios = require('axios');
 
@@ -20,6 +19,7 @@ if (!url) {
 
 var mongoClient = require('mongodb').MongoClient(url, { useUnifiedTopology: true, useNewUrlParser: true });
 
+var globalStart = Date.now();
 
 mongoClient.connect(onConnected);
 
@@ -37,7 +37,7 @@ function collectionCreated(err, res) {
         let count = await countUsers();
         console.log(`Currently there are ${count} users in the database`);
     })();
-    startScanning(1);
+    startScanning(process.argv.length > 2 ? +process.argv[2] : 1);
 }
 
 async function countUsers() {
@@ -104,8 +104,14 @@ async function startScanning(from) {
         let from = i;
         i = await scan(i);
         if (from != i) {
-            console.log(`Range ${from}-${i} took ${Date.now() - start} ms.`)
+            console.log(`Range ${from}-${i-1} took ${Date.now() - start} ms.`)
             start = Date.now();
+        }
+
+        if (i < 0) {
+            console.log('Seems like there is no players left to scan.')
+            console.log(`Done in ${(Date.now() - globalStart) / 60000} minutes.`);
+            return;
         }
     }
 
@@ -156,6 +162,9 @@ async function scan(from) {
         console.log(error.error_msg)
         return from;
     } else {
+        if (response.data.length == 0) {
+            return -1;
+        }
         let bulk = collection.initializeUnorderedBulkOp();
         response.data.forEach(user => {
             user.lastUpdate = Date.now()
