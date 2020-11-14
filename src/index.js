@@ -89,16 +89,18 @@ async function startScanning(startId) {
     while (i < 10_000_000) {
         let from = i;
         i = await scan(i);
+
+        if (i < 0) {
+            console.log('Seems like there is no players left to scan.')
+            console.log(`Done in under ${Math.ceil((Date.now() - globalStart) / 60000)} minutes.`);
+            return;
+        }
+
         if (from != i) {
             console.log(`Range ${from}-${i-1} took ${Date.now() - start} ms.`)
             start = Date.now();
         }
 
-        if (i < 0) {
-            console.log('Seems like there is no players left to scan.')
-            console.log(`Done in ${(Date.now() - globalStart) / 60000} minutes.`);
-            return;
-        }
     }
 
 }
