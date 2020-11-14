@@ -111,6 +111,15 @@ async function startScanning(from) {
 
 }
 
+function bulkExecute(op) {
+    return new Promise((ok, err) => {
+        op.execute((error, result) => {
+            if (error) err(error);
+            else ok(result);
+        });
+    })
+}
+
 async function scan(from) {
 
     // console.log("Fetching fresh users...")
@@ -150,13 +159,16 @@ async function scan(from) {
         let bulk = collection.initializeUnorderedBulkOp();
         response.data.forEach(user => {
             user.lastUpdate = Date.now()
-            delete user.online
+            user._id = user.id;
+            delete user.id;
+            delete user.online;
             user.guild = user.guild ? user.guild.id : 0;
-            bulk.find({ id: user.id }).upsert().update({ $set: user });
+            bulk.find({ _id: user._id }).upsert().update({ $set: user });
         });
-        bulk.execute((err, res) => {
-            if (err) throw err
-        });
+
+        // collection.insertMany()
+        await bulkExecute(bulk);
+
         return to;
     }
 
