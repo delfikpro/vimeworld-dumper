@@ -154,7 +154,9 @@ async function scan(from) {
             user.guild = user.guild ? user.guild.id : 0;
             bulk.find({ id: user.id }).upsert().update({ $set: user });
         });
-        bulk.execute();
+        bulk.execute((err, res) => {
+            if (err) throw err
+        });
         return to;
     }
 
