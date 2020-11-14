@@ -90,16 +90,23 @@ async function findToken() {
             return;
         }
 
-        setTimeout(() => ok(nearestToken), time - nearestTime);
+        console.log(`All tokens are expired, the nearest one will be available in ${Math.ceil((nearestTime - time) / 1000)}s.`)
+
+        setTimeout(() => ok(nearestToken), nearestTime - time);
     });
 }
 
 async function startScanning(from) {
 
     let i = 1;
+    let start = Date.now();
     while (i < 10_000_000) {
+        let from = i;
         i = await scan(i);
-        console.log(`i is now ${i}`)
+        if (from != i) {
+            console.log(`Range ${from}-${i} took ${Date.now() - start} ms.`)
+            start = Date.now();
+        }
     }
 
 }
@@ -122,7 +129,6 @@ async function scan(from) {
     }
 
     let token = await findToken();
-    console.log(token);
 
     let response = await axios({
         method: 'post',
@@ -133,23 +139,24 @@ async function scan(from) {
         } : {},
     });
 
+    token.requestsLeft = +response.headers['x-ratelimit-remaining'];
+    token.resetTime = (+response.headers['x-ratelimit-reset-after'] + 1) * 1000 + Date.now();
+
     let error = response.data.error;
     if (error) {
         console.log(error.error_msg)
+        return from;
     } else {
-        token.requestsLeft = response.headers['X-RateLimit-Remaining']
-        token.resetTime = Date.now() + response.headers['X-RateLimit-Reset-After']
         let bulk = collection.initializeUnorderedBulkOp();
         response.data.forEach(user => {
             user.lastUpdate = Date.now()
             delete user.online
+            user.guild = user.guild ? user.guild.id : 0;
             bulk.find({ id: user.id }).upsert().update({ $set: user });
         });
-        bulk.execute((err, res) => {
-            if (err) throw err
-        });
+        bulk.execute();
+        return to;
     }
-    return to;
 
 
 }
