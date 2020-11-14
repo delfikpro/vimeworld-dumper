@@ -17,7 +17,7 @@ if (!url) {
     return;
 }
 
-var mongoClient = require('mongodb').MongoClient(url, { useUnifiedTopology: true, useNewUrlParser: true });
+var mongoClient = mongo.MongoClient(url, { useUnifiedTopology: true, useNewUrlParser: true });
 
 var globalStart = Date.now();
 
@@ -48,20 +48,6 @@ async function countUsers() {
                 : resolve(data);
         }));
 }
-
-function findFresh(from) {
-    return new Promise((resolve, reject) => collection
-        .find({
-            id: { "$gte": from },
-            lastUpdate: { "$gt": Date.now() - 6 * 60 * 60 * 1000 }
-        })
-        .limit(1000)
-        .toArray(function (err, data) {
-            err
-                ? reject(err)
-                : resolve(data);
-        }));
-};
 
 async function findToken() {
     return new Promise((ok, err) => {
@@ -96,9 +82,9 @@ async function findToken() {
     });
 }
 
-async function startScanning(from) {
+async function startScanning(startId) {
 
-    let i = 1;
+    let i = startId;
     let start = Date.now();
     while (i < 10_000_000) {
         let from = i;
@@ -128,18 +114,9 @@ function bulkExecute(op) {
 
 async function scan(from) {
 
-    // console.log("Fetching fresh users...")
-    // let freshUsers = await findFresh(from);
-    // console.log("Got " + freshUsers.length + " fresh users")
     let usersToCheck = [];
     let to = from + 1000;
     for (let id = from; id < to; id++) {
-        // let isFresh = false;
-        // for (let freshUser in freshUsers) {
-        //     if (freshUser.id == id) isFresh = true;
-        // }
-        // if (isFresh) to++;
-        // else 
         usersToCheck.push(id);
     }
 

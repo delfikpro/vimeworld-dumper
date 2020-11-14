@@ -1,7 +1,7 @@
 {
   "name": "vimeworld-dumper",
   "version": "1.0.0",
-  "description": "",
+  "description": "Dump vimeworld players info from public api",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -10,9 +10,6 @@
   "license": "ISC",
   "dependencies": {
     "axios": "^0.21.0",
-    "lodash": "^4.17.20",
-    "mongodb": "^3.6.3",
-    "mongoose": "^5.10.14",
-    "q": "^1.5.1"
+    "mongodb": "^3.6.3"
   }
 }
