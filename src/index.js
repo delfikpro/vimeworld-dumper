@@ -23,20 +23,19 @@ var globalStart = Date.now();
 
 mongoClient.connect(onConnected);
 
-function onConnected(err, session) {
+function onConnected(err, sess) {
     if (err) throw err;
+    session = sess;
     db = session.db("museum");
     console.log("Connected to Mongo!");
     db.createCollection("vime", collectionCreated);
 }
 
-function collectionCreated(err, res) {
+async function collectionCreated(err, res) {
     if (!err) console.log("Collection 'vime' created!");
     collection = db.collection("vime");
-    (async () => {
-        let count = await countUsers();
-        console.log(`Currently there are ${count} users in the database`);
-    })();
+    let count = await countUsers();
+    console.log(`Currently there are ${count} users in the database`);
     startScanning(process.argv.length > 2 ? +process.argv[2] : 1);
 }
 
@@ -91,8 +90,10 @@ async function startScanning(startId) {
         i = await scan(i);
 
         if (i < 0) {
-            console.log('Seems like there is no players left to scan.')
-            console.log(`Done in under ${Math.ceil((Date.now() - globalStart) / 60000)} minutes.`);
+            console.log('Seems like there are no players left to scan.')
+            let elapsedTime = Math.ceil((Date.now() - globalStart) / 60000);
+            console.log('Done in under ' + (elapsedTime == 1 ? 'a minute.' : elapsedTime + ' minutes.'));
+            session.close();
             return;
         }
 
